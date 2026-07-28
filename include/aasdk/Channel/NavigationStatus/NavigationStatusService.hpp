@@ -46,14 +46,12 @@ namespace aasdk::channel::navigationstatus {
     void handleChannelOpenRequest(const common::DataConstBuffer &payload,
                                   INavigationStatusServiceEventHandler::Pointer eventHandler);
 
-    void handleStatusUpdate(const common::DataConstBuffer &payload,
-                            INavigationStatusServiceEventHandler::Pointer eventHandler);
+    void handleNavigationState(const common::DataConstBuffer &payload,
+                              INavigationStatusServiceEventHandler::Pointer eventHandler);
 
-    void
-    handleTurnEvent(const common::DataConstBuffer &payload, INavigationStatusServiceEventHandler::Pointer eventHandler);
+    void handleCurrentPosition(const common::DataConstBuffer &payload,
+                               INavigationStatusServiceEventHandler::Pointer eventHandler);
 
-    void handleDistanceEvent(const common::DataConstBuffer &payload,
-                             INavigationStatusServiceEventHandler::Pointer eventHandler);
   };
 
 }
