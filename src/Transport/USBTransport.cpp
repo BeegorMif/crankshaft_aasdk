@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with aasdk. If not, see <http://www.gnu.org/licenses/>.
 
+#include <aasdk/Common/Log.hpp>
+#include <aasdk/Common/ModernLogger.hpp>
 #include <aasdk/Transport/USBTransport.hpp>
 
 
@@ -24,12 +26,37 @@ namespace aasdk {
     USBTransport::USBTransport(boost::asio::io_service &ioService, usb::IAOAPDevice::Pointer aoapDevice)
         : Transport(ioService), aoapDevice_(std::move(aoapDevice)) {}
 
+      bool USBTransport::isTransientReceiveError(const error::Error &e) {
+      static constexpr uint32_t kLibusbTransferError = 1;
+      static constexpr uint32_t kLibusbTransferTimedOut = 2;
+      static constexpr uint32_t kLibusbTransferCancelled = 4294967292u;  // -4
+
+      return e.getCode() == error::ErrorCode::USB_TRANSFER &&
+             (e.getNativeCode() == kLibusbTransferError ||
+              e.getNativeCode() == kLibusbTransferTimedOut ||
+              e.getNativeCode() == kLibusbTransferCancelled);
+    }
+
     void USBTransport::enqueueReceive(common::DataBuffer buffer) {
       auto usbEndpointPromise = usb::IUSBEndpoint::Promise::defer(receiveStrand_);
       usbEndpointPromise->then([this, self = this->shared_from_this()](auto bytesTransferred) {
+                                 receiveRetryCount_ = 0;
                                  this->receiveHandler(bytesTransferred);
                                },
-                               [this, self = this->shared_from_this()](auto e) {
+                               [this, self = this->shared_from_this(), buffer](auto e) {
+                                 if (isTransientReceiveError(e) &&
+                                     receiveRetryCount_ < cMaxTransientReceiveRetries) {
+                                   ++receiveRetryCount_;
+                                   AASDK_LOG_TRANSPORT(warning,
+                                       "Transient USB receive error (retry " +
+                                       std::to_string(receiveRetryCount_) + "/" +
+                                       std::to_string(cMaxTransientReceiveRetries) +
+                                       "): " + std::string(e.what()));
+                                   this->enqueueReceive(buffer);
+                                   return;
+                                 }
+
+                                 receiveRetryCount_ = 0;
                                  this->rejectReceivePromises(e);
                                });
 

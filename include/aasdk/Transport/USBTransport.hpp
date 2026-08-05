@@ -40,10 +40,24 @@ namespace aasdk {
 
       void sendHandler(SendQueue::iterator queueElement, common::Data::size_type offset, size_t bytesTransferred);
 
+      // Returns true for libusb transfer errors that are transient at the
+      // single-transfer level (generic error, timeout, or a transfer
+      // cancelled by a concurrent libusb reset) and therefore safe to retry
+      // in place without tearing anything down. LIBUSB_TRANSFER_NO_DEVICE is
+      // deliberately excluded: it means the underlying device handle is gone,
+      // which a same-handle retry cannot fix. That case is left to propagate
+      // immediately so the owning service (which controls device discovery
+      // and re-negotiation) can decide whether to start a fresh session.
+      static bool isTransientReceiveError(const error::Error &e);
+
       usb::IAOAPDevice::Pointer aoapDevice_;
+
+      uint32_t receiveRetryCount_ = 0;
 
       static constexpr uint32_t cSendTimeoutMs = 10000;
       static constexpr uint32_t cReceiveTimeoutMs = 0;
+      static constexpr uint32_t cMaxTransientReceiveRetries = 3;
+
     };
 
   }

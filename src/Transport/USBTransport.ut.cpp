@@ -183,6 +183,94 @@ TEST_F(USBTransportUnitTest, USBTransport_ReceiveError)
     ioService_.run();
 }
 
+// LIBUSB_TRANSFER_ERROR (1), LIBUSB_TRANSFER_TIMED_OUT (2), and
+// LIBUSB_TRANSFER_CANCELLED (-4) on a receive should be retried in place,
+// transparently to the caller, instead of rejecting the queued promise.
+TEST_F(USBTransportUnitTest, USBTransport_ReceiveTransientErrorRetriesThenSucceeds)
+{
+    const size_t receiveSize = 100;
+
+    usb::IUSBEndpoint::Promise::Pointer usbEndpointPromise;
+    common::DataBuffer dataBuffer;
+    EXPECT_CALL(inEndpointMock_, bulkTransfer(_, _, _)).Times(3)
+            .WillRepeatedly(DoAll(SaveArg<0>(&dataBuffer), SaveArg<2>(&usbEndpointPromise)));
+
+    USBTransport::Pointer transport(std::make_shared<USBTransport>(ioService_, aoapDevice_));
+    transport->receive(receiveSize, std::move(receivePromise_));
+    ioService_.run();
+    ioService_.reset();
+
+    EXPECT_CALL(receivePromiseHandlerMock_, onReject(_)).Times(0);
+
+    // First attempt: generic transfer error.
+    usbEndpointPromise->reject(error::Error(error::ErrorCode::USB_TRANSFER, 1));
+    ioService_.run();
+    ioService_.reset();
+
+    // Second attempt: cancelled by a concurrent libusb reset.
+    usbEndpointPromise->reject(error::Error(error::ErrorCode::USB_TRANSFER, static_cast<uint32_t>(-4)));
+    ioService_.run();
+    ioService_.reset();
+
+    // Third attempt succeeds.
+    EXPECT_TRUE(dataBuffer.size >= receiveSize);
+    common::Data expectedData(receiveSize, 0x5E);
+    std::copy(expectedData.begin(), expectedData.end(), dataBuffer.data);
+    EXPECT_CALL(receivePromiseHandlerMock_, onResolve(expectedData)).Times(1);
+    usbEndpointPromise->resolve(receiveSize);
+    ioService_.run();
+}
+
+// Once transient retries are exhausted, the error should propagate like any
+// other rejection.
+TEST_F(USBTransportUnitTest, USBTransport_ReceiveTransientErrorExhaustsRetries)
+{
+    usb::IUSBEndpoint::Promise::Pointer usbEndpointPromise;
+    EXPECT_CALL(inEndpointMock_, bulkTransfer(_, _, _)).Times(4)
+            .WillRepeatedly(SaveArg<2>(&usbEndpointPromise));
+
+    USBTransport::Pointer transport(std::make_shared<USBTransport>(ioService_, aoapDevice_));
+    transport->receive(1000, std::move(receivePromise_));
+    ioService_.run();
+    ioService_.reset();
+
+    const error::Error e(error::ErrorCode::USB_TRANSFER, 1);
+    EXPECT_CALL(receivePromiseHandlerMock_, onResolve(_)).Times(0);
+
+    // Three retries (max) are absorbed silently.
+    for (int i = 0; i < 3; ++i)
+    {
+        usbEndpointPromise->reject(e);
+       ioService_.run();
+        ioService_.reset();
+    }
+
+    // Fourth failure exceeds the retry budget and propagates.
+    EXPECT_CALL(receivePromiseHandlerMock_, onReject(e)).Times(1);
+    usbEndpointPromise->reject(e);
+    ioService_.run();
+}
+
+// LIBUSB_TRANSFER_NO_DEVICE (5) must NOT be retried at the transport layer:
+// the device handle is gone, so retrying it can't succeed, and the owning
+// service needs to see it immediately to decide on re-discovery/teardown.
+TEST_F(USBTransportUnitTest, USBTransport_ReceiveNoDeviceErrorIsNotRetried)
+{
+    usb::IUSBEndpoint::Promise::Pointer usbEndpointPromise;
+    EXPECT_CALL(inEndpointMock_, bulkTransfer(_, _, _)).Times(1)
+            .WillOnce(SaveArg<2>(&usbEndpointPromise));
+
+    USBTransport::Pointer transport(std::make_shared<USBTransport>(ioService_, aoapDevice_));
+    transport->receive(1000, std::move(receivePromise_));
+    ioService_.run();
+    ioService_.reset();
+
+    const error::Error e(error::ErrorCode::USB_TRANSFER, 5);
+    EXPECT_CALL(receivePromiseHandlerMock_, onReject(e)).Times(1);
+    usbEndpointPromise->reject(e);
+    ioService_.run();
+}
+
 TEST_F(USBTransportUnitTest, USBTransport_Send)
 {
     usb::IUSBEndpoint::Promise::Pointer usbEndpointPromise;
