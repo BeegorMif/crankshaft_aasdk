@@ -25,6 +25,28 @@
 namespace aasdk {
   namespace usb {
 
+    namespace {
+      // Releases the reference taken via usbWrapper_.refDevice() on every
+      // return path in handleDevice(), without having to remember to call
+      // unrefDevice() on each branch.
+      struct ScopedUsbDeviceRef {
+        ScopedUsbDeviceRef(IUSBWrapper &usbWrapper, libusb_device *device)
+            : usbWrapper_(usbWrapper), device_(device) {}
+
+        ~ScopedUsbDeviceRef() {
+          if (device_ != nullptr) {
+            usbWrapper_.unrefDevice(device_);
+          }
+        }
+
+        ScopedUsbDeviceRef(const ScopedUsbDeviceRef &) = delete;
+        ScopedUsbDeviceRef &operator=(const ScopedUsbDeviceRef &) = delete;
+
+        IUSBWrapper &usbWrapper_;
+        libusb_device *device_;
+      };
+    }
+
     USBHub::USBHub(IUSBWrapper &usbWrapper, boost::asio::io_service &ioService,
                    IAccessoryModeQueryChainFactory &queryChainFactory)
         : usbWrapper_(usbWrapper), strand_(ioService), queryChainFactory_(queryChainFactory) {
@@ -72,9 +94,9 @@ namespace aasdk {
                                      void *userData) {
       if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED) {
         auto self = reinterpret_cast<USBHub *>(userData)->shared_from_this();
+        self->usbWrapper_.refDevice(device);
         self->strand_.dispatch(std::bind(&USBHub::handleDevice, self, device));
       }
-
       return 0;
     }
 
@@ -84,6 +106,10 @@ namespace aasdk {
     }
 
     void USBHub::handleDevice(libusb_device *device) {
+      // Releases the reference taken in hotplugEventsHandler() on every
+      // return path below.
+      ScopedUsbDeviceRef deviceRefGuard(usbWrapper_, device);
+
       if (hotplugPromise_ == nullptr) {
         return;
       }
