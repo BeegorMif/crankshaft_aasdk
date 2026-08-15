@@ -30,7 +30,7 @@ namespace aasdk::messenger {
 
   }
 
-  void MessageInStream::startReceive(ReceivePromise::Pointer promise) {
+void MessageInStream::startReceive(ReceivePromise::Pointer promise) {
     AASDK_LOG_MESSENGER(debug, "startReceiveCalled()");
     strand_.dispatch([this, self = this->shared_from_this(), promise = std::move(promise)]() mutable {
       if (promise_ == nullptr) {
@@ -42,13 +42,14 @@ namespace aasdk::messenger {
             },
             [this, self = this->shared_from_this()](const error::Error &e) mutable {
               AASDK_LOG_MESSENGER(debug, "Rejecting message.");
-              promise_->reject(e);
-              promise_.reset();
+              if (promise_) {
+                promise_->reject(e);
+                promise_.reset();
+              }
             });
 
         transport_->receive(FrameHeader::getSizeOf(), std::move(transportPromise));
       } else {
-        promise_.reset();
         AASDK_LOG_MESSENGER(debug, "Already Handling Promise");
         promise->reject(error::Error(error::ErrorCode::OPERATION_IN_PROGRESS));
       }

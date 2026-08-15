@@ -78,6 +78,10 @@ namespace aasdk {
 
       virtual int getDeviceDescriptor(libusb_device *dev, libusb_device_descriptor &desc) = 0;
 
+      virtual void refDevice(libusb_device *dev) = 0;
+
+      virtual void unrefDevice(libusb_device *dev) = 0;
+
       virtual void handleEvents() = 0;
 
       virtual HotplugCallbackHandle

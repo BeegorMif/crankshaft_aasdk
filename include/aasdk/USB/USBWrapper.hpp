@@ -69,6 +69,10 @@ namespace aasdk {
 
       int getDeviceDescriptor(libusb_device *dev, libusb_device_descriptor &desc) override;
 
+      void refDevice(libusb_device *dev) override;
+
+      void unrefDevice(libusb_device *dev) override;
+
       void handleEvents() override;
 
       HotplugCallbackHandle

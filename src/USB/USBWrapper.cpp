@@ -126,7 +126,12 @@ namespace aasdk {
     int USBWrapper::getDeviceDescriptor(libusb_device *dev, libusb_device_descriptor &desc) {
       return libusb_get_device_descriptor(dev, &desc);
     }
-
+    void USBWrapper::refDevice(libusb_device *dev) {
+      libusb_ref_device(dev);
+    }
+    void USBWrapper::unrefDevice(libusb_device *dev) {
+      libusb_unref_device(dev);
+    }
     void USBWrapper::handleEvents() {
       libusb_handle_events(usbContext_);
     }
