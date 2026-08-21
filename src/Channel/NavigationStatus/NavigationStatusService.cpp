@@ -83,6 +83,7 @@ namespace aasdk::channel::navigationstatus {
       default:
         AASDK_LOG(error) << "[NavigationStatusService] Message Id not Handled: " << messageId.getId()
                           << " : " << dump(payload);
+        this->receive(std::move(eventHandler));
       break;
     }
   }
