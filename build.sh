@@ -93,6 +93,7 @@ install_deps() {
       *)
         case "${os_id}:${os_version_id}" in
           ubuntu:24.04) distro="ubuntu24" ;;
+          ubuntu:26.04) distro="ubuntu26" ;;
           debian:13) distro="trixie" ;;
         esac
         ;;

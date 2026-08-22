@@ -248,7 +248,7 @@ else()
     message(STATUS "Skipping Abseil requirement - using system protobuf")
 endif()
 
-find_package(Boost REQUIRED COMPONENTS system log_setup log OPTIONAL_COMPONENTS unit_test_framework)
+find_package(Boost REQUIRED COMPONENTS log_setup log OPTIONAL_COMPONENTS unit_test_framework)
 
 # Capture Boost version for packaging
 if(Boost_VERSION)
