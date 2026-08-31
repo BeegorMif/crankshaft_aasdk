@@ -69,6 +69,7 @@ namespace aasdk::channel::mediabrowser {
     switch (messageId.getId()) {
       case aap_protobuf::service::control::message::ControlMessageType::MESSAGE_CHANNEL_OPEN_REQUEST:
         this->handleChannelOpenRequest(payload, std::move(eventHandler));
+        break;
       case aap_protobuf::service::mediabrowser::MediaBrowserMessageId::MEDIA_ROOT_NODE:
       case aap_protobuf::service::mediabrowser::MediaBrowserMessageId::MEDIA_SOURCE_NODE:
       case aap_protobuf::service::mediabrowser::MediaBrowserMessageId::MEDIA_LIST_NODE:
